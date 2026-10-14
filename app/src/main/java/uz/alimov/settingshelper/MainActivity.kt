@@ -13,7 +13,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -430,6 +429,7 @@ fun NotificationOptionItem(
     onSelect: () -> Unit
 ) {
     Card(
+        onClick = onSelect,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -438,9 +438,7 @@ fun NotificationOptionItem(
             }
         ),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onSelect() }
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
