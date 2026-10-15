@@ -285,7 +285,6 @@ fun MainSettingsScreen(
                         onClick = {
                             hasPermission = checkWriteSecureSettingsPermission(context)
                             currentOption = readCurrentLockScreenOption(context)
-                            Toast.makeText(context, "Refreshed settings", Toast.LENGTH_SHORT).show()
                         }
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -606,7 +605,6 @@ private fun applyLockScreenOption(context: Context, option: LockScreenNotificati
             "lock_screen_allow_private_notifications",
             allowPrivate
         )
-        Toast.makeText(context, "Lock screen notification setting updated", Toast.LENGTH_SHORT).show()
     } catch (_: SecurityException) {
         Toast.makeText(
             context,
