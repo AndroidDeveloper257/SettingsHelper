@@ -618,14 +618,21 @@ private fun applyLockScreenOption(context: Context, option: LockScreenNotificati
 
 private fun openSystemNotificationSettings(context: Context) {
     try {
-        val intent = Intent("android.settings.ACTION_NOTIFICATION_SETTINGS")
+        val intent = Intent("android.settings.ALL_APPS_NOTIFICATION_SETTINGS")
         context.startActivity(intent)
     } catch (_: Exception) {
         try {
-            val intent = Intent(Settings.ACTION_SETTINGS)
+            val intent = Intent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
+                putExtra("android.provider.extra.APP_PACKAGE", context.packageName)
+            }
             context.startActivity(intent)
         } catch (_: Exception) {
-            Toast.makeText(context, "Unable to open system settings", Toast.LENGTH_SHORT).show()
+            try {
+                val intent = Intent(Settings.ACTION_SETTINGS)
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "Unable to open system settings", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
