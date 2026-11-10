@@ -266,6 +266,15 @@ fun MainSettingsScreen(
         mutableStateOf(readCurrentLockScreenOption(context))
     }
 
+    val onOptionSelected: (LockScreenNotificationOption) -> Unit = { option ->
+        if (applyLockScreenOption(context, option)) {
+            currentOption = option
+        } else {
+            hasPermission = checkWriteSecureSettingsPermission(context)
+            currentOption = readCurrentLockScreenOption(context)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -347,10 +356,7 @@ fun MainSettingsScreen(
                         title = "Show notifications and content",
                         description = "All notification details and content are visible on the lock screen.",
                         selected = currentOption == LockScreenNotificationOption.SHOW_ALL,
-                        onSelect = {
-                            currentOption = LockScreenNotificationOption.SHOW_ALL
-                            applyLockScreenOption(context, LockScreenNotificationOption.SHOW_ALL)
-                        }
+                        onSelect = { onOptionSelected(LockScreenNotificationOption.SHOW_ALL) }
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -359,10 +365,7 @@ fun MainSettingsScreen(
                         title = "Show notifications, but hide content",
                         description = "Notifications appear on the lock screen, but sensitive contents remain hidden until unlocked.",
                         selected = currentOption == LockScreenNotificationOption.HIDE_CONTENT,
-                        onSelect = {
-                            currentOption = LockScreenNotificationOption.HIDE_CONTENT
-                            applyLockScreenOption(context, LockScreenNotificationOption.HIDE_CONTENT)
-                        }
+                        onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_CONTENT) }
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -371,10 +374,7 @@ fun MainSettingsScreen(
                         title = "Hide notifications",
                         description = "No notifications are shown on the lock screen at all.",
                         selected = currentOption == LockScreenNotificationOption.HIDE_ALL,
-                        onSelect = {
-                            currentOption = LockScreenNotificationOption.HIDE_ALL
-                            applyLockScreenOption(context, LockScreenNotificationOption.HIDE_ALL)
-                        }
+                        onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_ALL) }
                     )
                 }
             }
@@ -589,14 +589,14 @@ private fun readCurrentLockScreenOption(context: Context): LockScreenNotificatio
     }
 }
 
-private fun applyLockScreenOption(context: Context, option: LockScreenNotificationOption) {
+private fun applyLockScreenOption(context: Context, option: LockScreenNotificationOption): Boolean {
     val (showNotifs, allowPrivate) = when (option) {
         LockScreenNotificationOption.SHOW_ALL -> Pair(1, 1)
         LockScreenNotificationOption.HIDE_CONTENT -> Pair(1, 0)
         LockScreenNotificationOption.HIDE_ALL -> Pair(0, 0)
     }
 
-    try {
+    return try {
         Settings.Secure.putInt(
             context.contentResolver,
             "lock_screen_show_notifications",
@@ -607,12 +607,14 @@ private fun applyLockScreenOption(context: Context, option: LockScreenNotificati
             "lock_screen_allow_private_notifications",
             allowPrivate
         )
+        true
     } catch (_: SecurityException) {
         Toast.makeText(
             context,
             "Permission denied. Grant WRITE_SECURE_SETTINGS via ADB.",
             Toast.LENGTH_LONG
         ).show()
+        false
     }
 }
 
