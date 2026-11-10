@@ -8,11 +8,15 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +32,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
@@ -49,12 +55,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.delay
 import uz.alimov.settingshelper.ui.theme.SettingsHelperTheme
 
 enum class LockScreenNotificationOption {
@@ -70,6 +79,13 @@ enum class LockScreenNotificationOption {
     HIDE_CONTENT,   // Show notifications, but hide content
     HIDE_ALL        // Hide notifications
 }
+
+data class AppToast(
+    val message: String,
+    val isError: Boolean = false,
+    val icon: ImageVector? = null,
+    val id: Long = System.currentTimeMillis()
+)
 
 class MainActivity : FragmentActivity() {
 
@@ -265,13 +281,29 @@ fun MainSettingsScreen(
     var currentOption by remember {
         mutableStateOf(readCurrentLockScreenOption(context))
     }
+    var activeToast by remember {
+        mutableStateOf<AppToast?>(null)
+    }
+
+    fun showToast(msg: String, isError: Boolean = false, icon: ImageVector? = null) {
+        activeToast = AppToast(msg, isError, icon)
+    }
+
+    LaunchedEffect(activeToast) {
+        if (activeToast != null) {
+            delay(3000)
+            activeToast = null
+        }
+    }
 
     val onOptionSelected: (LockScreenNotificationOption) -> Unit = { option ->
         if (applyLockScreenOption(context, option)) {
             currentOption = option
+            showToast("Notification settings updated", isError = false)
         } else {
             hasPermission = checkWriteSecureSettingsPermission(context)
             currentOption = readCurrentLockScreenOption(context)
+            showToast("Permission denied. Grant WRITE_SECURE_SETTINGS via ADB.", isError = true)
         }
     }
 
@@ -296,6 +328,7 @@ fun MainSettingsScreen(
                         onClick = {
                             hasPermission = checkWriteSecureSettingsPermission(context)
                             currentOption = readCurrentLockScreenOption(context)
+                            showToast("Settings refreshed", isError = false)
                         }
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -310,112 +343,169 @@ fun MainSettingsScreen(
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (!hasPermission) {
-                PermissionRequiredCard(
-                    onCheckAgain = {
-                        hasPermission = checkWriteSecureSettingsPermission(context)
-                        if (hasPermission) {
-                            Toast.makeText(context, "Permission granted!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                shape = RoundedCornerShape(16.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Notification Display Options",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Select how notification contents are displayed on your device lock screen.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    NotificationOptionItem(
-                        title = "Show notifications and content",
-                        description = "All notification details and content are visible on the lock screen.",
-                        selected = currentOption == LockScreenNotificationOption.SHOW_ALL,
-                        onSelect = { onOptionSelected(LockScreenNotificationOption.SHOW_ALL) }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    NotificationOptionItem(
-                        title = "Show notifications, but hide content",
-                        description = "Notifications appear on the lock screen, but sensitive contents remain hidden until unlocked.",
-                        selected = currentOption == LockScreenNotificationOption.HIDE_CONTENT,
-                        onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_CONTENT) }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    NotificationOptionItem(
-                        title = "Hide notifications",
-                        description = "No notifications are shown on the lock screen at all.",
-                        selected = currentOption == LockScreenNotificationOption.HIDE_ALL,
-                        onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_ALL) }
+                if (!hasPermission) {
+                    PermissionRequiredCard(
+                        onCheckAgain = {
+                            hasPermission = checkWriteSecureSettingsPermission(context)
+                            if (hasPermission) {
+                                showToast("Permission granted!", isError = false)
+                            } else {
+                                showToast("Permission missing", isError = true)
+                            }
+                        },
+                        onShowToast = { msg, isErr, icon -> showToast(msg, isErr, icon) }
                     )
                 }
-            }
 
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
-                            text = "System Settings Fallback",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                            text = "Notification Display Options",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Open system notification settings directly.",
+                            text = "Select how notification contents are displayed on your device lock screen.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = { openSystemNotificationSettings(context) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        NotificationOptionItem(
+                            title = "Show notifications and content",
+                            description = "All notification details and content are visible on the lock screen.",
+                            selected = currentOption == LockScreenNotificationOption.SHOW_ALL,
+                            onSelect = { onOptionSelected(LockScreenNotificationOption.SHOW_ALL) }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Open Settings")
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        NotificationOptionItem(
+                            title = "Show notifications, but hide content",
+                            description = "Notifications appear on the lock screen, but sensitive contents remain hidden until unlocked.",
+                            selected = currentOption == LockScreenNotificationOption.HIDE_CONTENT,
+                            onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_CONTENT) }
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        NotificationOptionItem(
+                            title = "Hide notifications",
+                            description = "No notifications are shown on the lock screen at all.",
+                            selected = currentOption == LockScreenNotificationOption.HIDE_ALL,
+                            onSelect = { onOptionSelected(LockScreenNotificationOption.HIDE_ALL) }
+                        )
                     }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "System Settings Fallback",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Open system notification settings directly.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = { openSystemNotificationSettings(context, onShowToast = { msg, err -> showToast(msg, err) }) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Open Settings")
+                        }
+                    }
+                }
+            }
+
+            CustomToastHost(
+                toast = activeToast,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun CustomToastHost(
+    toast: AppToast?,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = toast != null,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        modifier = modifier
+    ) {
+        toast?.let { data ->
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = if (data.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                shadowElevation = 8.dp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val defaultIcon = if (data.isError) Icons.Default.Error else Icons.Default.CheckCircle
+                    Icon(
+                        imageVector = data.icon ?: defaultIcon,
+                        contentDescription = null,
+                        tint = if (data.isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = data.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (data.isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }
@@ -479,7 +569,8 @@ fun NotificationOptionItem(
 
 @Composable
 fun PermissionRequiredCard(
-    onCheckAgain: () -> Unit
+    onCheckAgain: () -> Unit,
+    onShowToast: (String, Boolean, ImageVector?) -> Unit
 ) {
     val context = LocalContext.current
     val adbCommand = "adb shell pm grant uz.alimov.settingshelper android.permission.WRITE_SECURE_SETTINGS"
@@ -541,7 +632,7 @@ fun PermissionRequiredCard(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText("ADB Command", adbCommand)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Copied ADB command", Toast.LENGTH_SHORT).show()
+                            onShowToast("Copied ADB command", false, Icons.Default.ContentCopy)
                         }
                     ) {
                         Icon(
@@ -609,16 +700,11 @@ private fun applyLockScreenOption(context: Context, option: LockScreenNotificati
         )
         true
     } catch (_: SecurityException) {
-        Toast.makeText(
-            context,
-            "Permission denied. Grant WRITE_SECURE_SETTINGS via ADB.",
-            Toast.LENGTH_LONG
-        ).show()
         false
     }
 }
 
-private fun openSystemNotificationSettings(context: Context) {
+private fun openSystemNotificationSettings(context: Context, onShowToast: (String, Boolean) -> Unit) {
     try {
         val intent = Intent("android.settings.ALL_APPS_NOTIFICATION_SETTINGS")
         context.startActivity(intent)
@@ -633,7 +719,7 @@ private fun openSystemNotificationSettings(context: Context) {
                 val intent = Intent(Settings.ACTION_SETTINGS)
                 context.startActivity(intent)
             } catch (_: Exception) {
-                Toast.makeText(context, "Unable to open system settings", Toast.LENGTH_SHORT).show()
+                onShowToast("Unable to open system settings", true)
             }
         }
     }
